@@ -1,0 +1,3 @@
+Дополнительно надо установить `libspdlog-dev` в Debian-like системах для логгинга.
+
+`sudo apt install libspdlog-dev`
