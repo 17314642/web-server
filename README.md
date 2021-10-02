@@ -4,10 +4,9 @@ Fangtooth это минимальный веб-сервер в котором к
 
 ## Зависимости
 
-Дополнительно надо установить `libspdlog-dev` в Debian-like системах для логгинга.
+Дополнительно надо установить `spdlog` для логгинга.
 
+**Debian-like системы**
 ```bash
 sudo apt install libspdlog-dev
 ```
-
-
