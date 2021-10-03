@@ -10,3 +10,13 @@ Fangtooth это минимальный веб-сервер в котором к
 ```bash
 sudo apt install libspdlog-dev
 ```
+
+## Тестовое окружение
+
+**Запуск**
+```bash
+git clone https://github.com/17314642/web-server
+cd web-server
+docker build -t vvaria-httpd .
+docker run -p 80:80 vvaria-httpd
+```
