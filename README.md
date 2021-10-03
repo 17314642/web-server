@@ -9,5 +9,7 @@ Fangtooth это минимальный веб-сервер в котором к
 git clone https://github.com/17314642/web-server
 cd web-server
 docker build -t vvaria-httpd .
-docker run -p 80:80 vvaria-httpd
+docker run -d -p 80:80 vvaria-httpd
+./httptest.py
+docker container stop {CONTAINER_NAME}
 ```
