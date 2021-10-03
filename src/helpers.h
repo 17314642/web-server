@@ -25,7 +25,6 @@ struct httpresponse_t
     std::string version = "HTTP/1.1";
     int code;
     std::string description;
-    //Так как это минимальный веб-сервер, то тут рано думать о keep-alive
     std::vector<std::string> options = {"Server: Fangtooth/1.0.0", "Connection: close"};
     std::string body;
 
@@ -44,10 +43,12 @@ struct httpresponse_t
     }
 };
 
+/*
+    В C++ нету pop_front() у вектора, только pop_back()
+*/
 template<typename T>
 void pop_front(std::vector<T>& vec)
 {
-    assert(!vec.empty());
     vec.front() = std::move(vec.back());
     vec.pop_back();
 }

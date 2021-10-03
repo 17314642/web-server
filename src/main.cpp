@@ -8,6 +8,7 @@
 #include <chrono>
 #include <fstream>
 #include <filesystem>
+#include <iomanip>
 
 // C library
 #include <unistd.h>
@@ -25,120 +26,29 @@
 // HTTP Status Codes
 #include "HttpStatusCodes_C++11.h"
 
+#include "str_helpers.h"
 #include "helpers.h"
 
 std::queue<int> thread_work;
 std::mutex queue_lock;
 
-const std::string SERVER_ROOT = "/var/www/html";
-int tcp_socket = 0;
+int PORT = 0, MAX_THREADS = 0;
+std::string SERVER_ROOT = "";
 
 class ThreadWorker
 {
     private:
-        std::string replace_all(std::string data, const std::string match, const std::string replace) 
-        {
-            std::string final_string;
-
-            while(true)
-            {
-                std::ostringstream tmp_string;
-                size_t pos = data.find(match);
-
-                if (pos == std::string::npos)
-                    break;
-
-                for (int i = 0; i < pos; i++)
-                {
-                    tmp_string << data[i];
-                }
-
-                tmp_string << replace;
-
-                for (int i = pos + match.length(); i < data.length(); i++)
-                {
-                    tmp_string << data[i];
-                }
-
-                data = tmp_string.str();
-                pos = data.find(match);
-            }
-
-            if (final_string.length() == 0)
-                return data;
-            else
-                return final_string;
-        }
-
-        std::vector<std::string> split(std::string data, const std::string match)
-        {
-            std::vector<size_t> found_positions = {};
-            std::vector<std::string> final_vector = {};
-
-            size_t current_position = 0;
-            while (true)
-            {
-                size_t result = data.find(match, current_position);
-
-                if (result == std::string::npos)
-                    break;
-
-                found_positions.push_back(result);
-                current_position = result + 1;
-            }
-
-            if (found_positions.size() != 0)
-            {
-                int last_index = 0;
-                for (int i = 0; i < found_positions.size() + 1; i++)
-                {
-                    std::string match_string = "";
-                    std::ostringstream string_stream;
-
-                    int end_index = found_positions[i];
-                    if (i == found_positions.size())
-                        end_index = data.length();
-
-                    for (int k = last_index; k < end_index; k++)
-                    {
-                        string_stream << data[k];
-                    }
-
-                    last_index = found_positions[i] + match.length();
-                    match_string = string_stream.str();
-                    final_vector.push_back(match_string);
-                }
-                return final_vector;
-            }
-
-            return {};
-        }
-
-        bool starts_with(const std::string data, const std::string match)
-        {
-            if (data.length() < match.length())
-                return false;
-
-            for (int i = 0; i < match.length(); i++)
-            {
-                if (data[i] != match[i])
-                    return false;
-            }
-
-            return true;
-        }
-
         httprequest_t parse(std::string buffer)
         {
-            std::vector<std::string> lines = split(buffer, "\r\n");
+            std::vector<std::string> lines = str_helpers::split(buffer, "\r\n");
             httprequest_t request;
 
-            if (lines.size() == 0)
+            /*if (lines.size() == 0)
             {
                 return request;
-            }
+            }*/
 
-            std::vector<std::string> command = split(lines[0], " ");
+            std::vector<std::string> command = str_helpers::split(lines[0], " ");
             std::ostringstream debug_info;
             debug_info << "[";
 
@@ -148,7 +58,7 @@ class ThreadWorker
             }
 
             debug_info << "]";
-            spdlog::info("Received request with type \"{0}\" and argument \"{1}\" and HTTP version is \"{2}\" , also options are: {3}", command[0], command[1], command[2], debug_info.str());
+            spdlog::debug("Received request with type \"{0}\" and argument \"{1}\" and HTTP version is \"{2}\" , also options are: {3}", command[0], command[1], command[2], debug_info.str());
 
             pop_front(lines);
 
@@ -164,7 +74,7 @@ class ThreadWorker
         {
             spdlog::debug("argument = {0}", request.argument);
             if (request.argument.find('?') != std::string::npos)
-                request.argument = split(request.argument, "?")[0];
+                request.argument = str_helpers::split(request.argument, "?")[0];
 
             request.argument = decode_url(request.argument);
 
@@ -173,9 +83,9 @@ class ThreadWorker
             std::error_code fs_error; // Намеренно неиспользуемая переменная чтобы избежать поимки исключения.
             std::filesystem::path fs_file = std::filesystem::weakly_canonical(std::string(SERVER_ROOT + request.argument), fs_error);
 
-            spdlog::info("Requested file \"{0}\"", fs_file.native());
+            spdlog::debug("Requested file \"{0}\"", fs_file.native());
 
-            if (starts_with(fs_file, SERVER_ROOT))
+            if (str_helpers::starts_with(fs_file, SERVER_ROOT))
             {
                 if (std::filesystem::exists(fs_file))
                 {
@@ -209,7 +119,9 @@ class ThreadWorker
                         response.code = 200;
 
                         uintmax_t requested_file_size = std::filesystem::file_size(fs_file);
+
                         response.options.push_back("Content-Length: " + std::to_string(requested_file_size));
+                        response.options.push_back("Content-Type: " + get_content_type(fs_file.extension()));
 
                         if (requested_file_size > 4 * 1024 * 1024) // Если размер файла превышает 4МБ, то отправлять частями.
                         {
@@ -235,6 +147,7 @@ class ThreadWorker
 
                         uintmax_t requested_file_size = std::filesystem::file_size(fs_file);
                         response.options.push_back("Content-Length: " + std::to_string(requested_file_size));
+                        response.options.push_back("Content-Type: " + get_content_type(fs_file.extension()));
                     }
                     else
                     {
@@ -251,8 +164,9 @@ class ThreadWorker
                 response.code = 403;
             }
 
+            response.options.push_back("Date: " + get_http_date());
             response.description = HttpStatus::reasonPhrase(response.code);
-            spdlog::info("response = {0}", replace_all(response.to_str(), "\r\n", "\\r\\n"));
+            spdlog::debug("response = {0}", str_helpers::replace_all(response.to_str(), "\r\n", "\\r\\n"));
 
             return response.to_str();
         }
@@ -267,6 +181,7 @@ class ThreadWorker
                 ch -= 'A' - 10;
             else 
                 ch = 0;
+
             return ch;
         }
 
@@ -295,6 +210,36 @@ class ThreadWorker
                 }
             }
             return result;
+        }
+
+        std::string get_content_type(std::string file_extension)
+        {
+            if (file_extension == ".html")
+                return "text/html";
+            else if (file_extension == ".jpg" || file_extension == ".jpeg")
+                return "image/jpeg";
+            else if (file_extension == ".png")
+                return "image/png";
+            else if (file_extension == ".js")
+                return "application/javascript";
+            else if (file_extension == ".css")
+                return "text/css";
+            else if (file_extension == ".gif")
+                return "image/gif";
+            else if (file_extension == ".swf")
+                return "application/x-shockwave-flash";
+            
+            return "application/octet-stream";
+        }
+
+        std::string get_http_date()
+        {
+            auto now = std::chrono::system_clock::now();
+            auto in_time_t = std::chrono::system_clock::to_time_t(now);
+
+            std::stringstream ss;
+            ss << std::put_time(std::gmtime(&in_time_t), "%a, %d %b %Y %X GMT"); // Mon, 30 Sep 2021 00:00:00 GMT
+            return ss.str();
         }
 
     public:
@@ -326,16 +271,16 @@ class ThreadWorker
                 {
                     if (status == -1)
                     {
-                        spdlog::warn("recv() returned -1. Error code: {0} ({1})", errno, strerror(errno));
+                        spdlog::debug("recv() returned -1. Error code: {0} ({1})", errno, strerror(errno));
                     }
 
-                    spdlog::info("Closing connection.");
+                    spdlog::debug("Closing connection.");
                     shutdown(current_connection, SHUT_RDWR);
                     close(current_connection);
                     continue;
                 }
 
-                spdlog::info("Bytes read: {0}.", status);
+                spdlog::debug("Bytes read: {0}.", status);
 
                 request = parse(recv_buffer);
 
@@ -344,10 +289,10 @@ class ThreadWorker
                     send_buffer = form_response(request);
                 
                     send(current_connection, send_buffer.data(), send_buffer.length(), 0);
-                    spdlog::info("Sent response!");
+                    spdlog::debug("Sent response!");
                 }
 
-                spdlog::info("Closing connection.");
+                spdlog::debug("Closing connection.");
                 shutdown(current_connection, SHUT_RDWR);
                 close(current_connection);
 
@@ -363,17 +308,15 @@ void thread_worker()
     worker.run();
 }
 
-void start_server(int port, int threads)
+void start_server()
 {
-    spdlog::info("Starting server on port {0:d} and on {1:d} threads.\n", port, threads);
-
     struct sockaddr_in server_address = { 0 };
 
-    tcp_socket = socket(AF_INET, SOCK_STREAM, 0);
+    int tcp_socket = socket(AF_INET, SOCK_STREAM, 0);
 
     server_address.sin_family        = AF_INET;
     server_address.sin_addr.s_addr   = htonl(INADDR_ANY);
-    server_address.sin_port          = htons(port);
+    server_address.sin_port          = htons(PORT);
 
     bind(tcp_socket, (struct sockaddr*)&server_address, sizeof(server_address));
     listen(tcp_socket, 10);
@@ -384,7 +327,7 @@ void start_server(int port, int threads)
         
         if (current_connection == -1)
         {
-            spdlog::error("accept() return {0}. Error code: \"{1}\"", current_connection, strerror(errno));
+            spdlog::debug("accept() return {0}. Error code: \"{1}\"", current_connection, strerror(errno));
             continue;
         }
 
@@ -394,21 +337,118 @@ void start_server(int port, int threads)
     }
 }
 
+bool read_config()
+{
+    std::filesystem::path config_path = "/etc/httpd.conf";
+
+    if (!std::filesystem::exists(config_path))
+    {
+        spdlog::critical("\"{0}\" does not exist.", config_path.native());
+        return false;
+    }
+
+    if (std::filesystem::is_directory(config_path))
+    {
+        spdlog::critical("\"{0}\" is a directory and not file.", config_path.native());
+        return false;
+    }
+
+    std::ifstream config_file(config_path);
+
+    if (!config_file.is_open())
+    {
+        spdlog::critical("Failed to open \"{0}\"", config_path.native());
+        return false;
+    }
+
+    config_file.seekg(0, std::ios::end);
+    size_t size = config_file.tellg();
+
+    std::string buffer;
+    buffer.resize(size);
+    
+    config_file.seekg(0);
+    config_file.read(&buffer[0], size);
+
+    if (!config_file)
+    {
+        spdlog::critical("Error reading \"{0}\"", config_path.native());
+        return false;
+    }
+
+    if (buffer.length() == 0)
+    {
+        spdlog::critical("\"{0}\" is empty.", config_path.native());
+        return false;
+    }
+
+    std::vector<std::string> vec_lines = str_helpers::split(buffer, "\n");
+    vec_lines.erase(std::find(vec_lines.begin(), vec_lines.end(), "")); // Удалить все пустые ячейки.
+
+    for (int i = 0; i < vec_lines.size(); i++)
+    {
+        if (str_helpers::starts_with(vec_lines[i], "thread_limit"))
+        {
+            MAX_THREADS = std::stoul(str_helpers::replace_all(vec_lines[i], "thread_limit ", ""));
+        }
+        else if (str_helpers::starts_with(vec_lines[i], "document_root"))
+        {
+            SERVER_ROOT = str_helpers::replace_all(vec_lines[i], "document_root ", "");
+        }
+        else if (str_helpers::starts_with(vec_lines[i], "port"))
+        {
+            PORT = std::stoul(str_helpers::replace_all(vec_lines[i], "port ", ""));
+        }
+    }
+
+    if (MAX_THREADS <= 0)
+    {
+        spdlog::critical("thread_limit not found in \"{0}\"", config_path.native());
+        return false;
+    }
+    
+    if (SERVER_ROOT == "")
+    {
+        spdlog::critical("document_root not found in \"{0}\"", config_path.native());
+        return false;
+    }
+    
+    if (PORT <= 0)
+    {
+        spdlog::critical("port not found in \"{0}\"", config_path.native());
+        return false;
+    }
+
+    return true;
+}
+
 int main()
 {
+    spdlog::set_level(spdlog::level::debug);
     spdlog::set_pattern("[%H:%M:%S] [%l] [thread %t] %v");
 
-    int port = 9000;
-    int threads = std::thread::hardware_concurrency() - 2;
+    if (!read_config())
+    {
+        spdlog::critical("Error reading config. Exiting.");
+        return -1;
+    }
 
     std::vector<std::thread> thread_workers;
-    for (int i = 0; i < 2; i++)
+    for (int i = 0; i < MAX_THREADS; i++)
     {
         thread_workers.push_back(std::thread(thread_worker));
         spdlog::info("Created thread {0}", i);
     }
 
-    start_server(port, threads);
+    spdlog::info("Starting server on port {0:d} and on {1:d} threads.\n", PORT, MAX_THREADS);
+    start_server();
 
+    for (int i = 0; i < MAX_THREADS; i++)
+    {
+        thread_workers[i].join();
+        spdlog::info("Joined thread {0}", i);
+    }
+
+    spdlog::info("Exiting.");
     return 0;
 }
