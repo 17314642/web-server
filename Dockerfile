@@ -8,4 +8,4 @@ WORKDIR /app
 COPY src src/
 COPY Makefile .
 RUN make
-CMD compiled/httpd
+ENTRYPOINT ["compiled/httpd"]

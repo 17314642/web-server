@@ -422,8 +422,16 @@ bool read_config()
     return true;
 }
 
+void signal_handler(int code)
+{
+    spdlog::critical("Received SIGTERM. Exiting.");
+    exit(0);
+}
+
 int main()
 {
+    signal(SIGTERM, signal_handler);
+
     spdlog::set_level(spdlog::level::debug);
     spdlog::set_pattern("[%H:%M:%S] [%l] [thread %t] %v");
 
