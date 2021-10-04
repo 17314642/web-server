@@ -21,9 +21,7 @@
 #include <errno.h>
 
 // Logging library
-//#include "spdlog/spdlog.h"
-#include "spdlog/async.h"
-#include "spdlog/sinks/basic_file_sink.h"
+#include "spdlog/spdlog.h"
 
 // HTTP Status Codes
 #include "HttpStatusCodes_C++11.h"
