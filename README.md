@@ -16,7 +16,7 @@ docker container stop {CONTAINER_NAME}
 
 ## Бенчмарк (i5-6400 3.3GHz)
 
-**nginx**
+**nginx (5.289 сек.) (ab -n 100000 -c 8 "http://127.0.0.1:8081/httptest/wikipedia_russia.html")**
 ```bash
 This is ApacheBench, Version 2.3 <$Revision: 1843412 $>
 Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
@@ -73,7 +73,7 @@ Percentage of the requests served within a certain time (ms)
   99%      1
  100%     16 (longest request)
 ```
-**Fangtooth 2 потока (5.188 сек.)**
+**Fangtooth 2 потока (5.188 сек.) (ab -n 100000 -c 8 "http://127.0.0.1:8080/httptest/wikipedia_russia.html")**
 ```bash
 This is ApacheBench, Version 2.3 <$Revision: 1843412 $>
 Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
@@ -131,7 +131,7 @@ Percentage of the requests served within a certain time (ms)
  100%     11 (longest request)
 ```
 
-**Fangtooth 4 потока (5.403 сек.)**
+**Fangtooth 4 потока (5.403 сек.) (ab -n 100000 -c 8 "http://127.0.0.1:8080/httptest/wikipedia_russia.html")**
 ```bash
 This is ApacheBench, Version 2.3 <$Revision: 1843412 $>
 Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
