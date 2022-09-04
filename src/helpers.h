@@ -25,7 +25,8 @@ struct httpresponse_t
     std::string version = "HTTP/1.1";
     int code;
     std::string description;
-    std::vector<std::string> options = {"Server: Fangtooth/1.0.0", "Connection: close"};
+    std::vector<std::string> options = {"Server: Fangtooth/2.0.0", "Connection: close"};
+    std::filesystem::path path;
     std::string body;
 
     std::string to_str()
@@ -38,7 +39,7 @@ struct httpresponse_t
             response_stream << options[i] << "\r\n";
         }
 
-        response_stream << "\r\n" << body;
+        response_stream << "\r\n";
         return response_stream.str();
     }
 };

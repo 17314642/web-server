@@ -60,7 +60,7 @@ class ThreadWorker
             }
 
             debug_info << "]";
-            // spdlog::debug("Received request with type \"{0}\" and argument \"{1}\" and HTTP version is \"{2}\" , also options are: {3}", command[0], command[1], command[2], debug_info.str());
+            spdlog::debug("Received request with type \"{0}\" and argument \"{1}\" and HTTP version is \"{2}\" , also options are: {3}", command[0], command[1], command[2], debug_info.str());
 
             pop_front(lines);
 
@@ -72,9 +72,9 @@ class ThreadWorker
             return request;
         }
 
-        std::string form_response(httprequest_t request)
+        httpresponse_t form_response(httprequest_t request)
         {
-            // spdlog::debug("argument = {0}", request.argument);
+            spdlog::debug("argument = {0}", request.argument);
             if (request.argument.find('?') != std::string::npos)
                 request.argument = str_helpers::split(request.argument, "?")[0];
 
@@ -85,7 +85,7 @@ class ThreadWorker
             std::error_code fs_error; // Намеренно неиспользуемая переменная чтобы избежать поимки исключения.
             std::filesystem::path fs_file = std::filesystem::weakly_canonical(std::string(SERVER_ROOT + request.argument), fs_error);
 
-            // spdlog::debug("Requested file \"{0}\"", fs_file.native());
+            spdlog::debug("Requested file \"{0}\"", fs_file.native());
 
             if (str_helpers::starts_with(fs_file, SERVER_ROOT))
             {
@@ -95,7 +95,7 @@ class ThreadWorker
                         fs_file /= "index.html";
 
                     std::ifstream requested_file(fs_file);
-                    
+
                     if (!requested_file.is_open())
                     {
                         switch (errno)
@@ -110,46 +110,20 @@ class ThreadWorker
                             case EACCES:
                                 response.code = 403;
                                 break;
-                            
+
                             default:
                                 response.code = 418;
                                 break;
                         }
                     }
-                    else if (request.type == "GET")
-                    {                
-                        response.code = 200;
-
-                        uintmax_t requested_file_size = std::filesystem::file_size(fs_file);
-                        response.options.push_back("Content-Type: " + get_content_type(fs_file.extension()));
-
-                        if (requested_file_size > 4 * 1024 * 1024) // Если размер файла превышает 4МБ, то отправлять частями.
-                        {
-                            response.options.push_back("Content-Length: BIG, " + fs_file.native());
-                        }
-                        else
-                        {
-                            response.options.push_back("Content-Length: " + std::to_string(requested_file_size));
-
-                            requested_file.seekg(0, std::ios::end);
-                            size_t size = requested_file.tellg();
-
-                            std::string buffer;
-                            buffer.resize(size);
-                            
-                            requested_file.seekg(0);
-                            requested_file.read(&buffer[0], size);
-
-                            response.body = buffer;
-                        }
-                    }
-                    else if (request.type == "HEAD")
+                    else if (request.type == "GET" || request.type == "HEAD")
                     {
                         response.code = 200;
 
                         uintmax_t requested_file_size = std::filesystem::file_size(fs_file);
-                        response.options.push_back("Content-Length: " + std::to_string(requested_file_size));
                         response.options.push_back("Content-Type: " + get_content_type(fs_file.extension()));
+                        response.options.push_back("Content-Length: " + std::to_string(requested_file_size));
+                        response.path = fs_file;
                     }
                     else
                     {
@@ -168,12 +142,12 @@ class ThreadWorker
 
             response.options.push_back("Date: " + get_http_date());
             response.description = HttpStatus::reasonPhrase(response.code);
-            // spdlog::debug("response = {0}", str_helpers::replace_all(response.to_str(), "\r\n", "\\r\\n"));
+            spdlog::debug("response = {0}", str_helpers::replace_all(response.to_str(), "\r\n", "\\r\\n"));
 
-            return response.to_str();
+            return response;
         }
 
-        unsigned char from_hex (unsigned char ch) 
+        unsigned char from_hex (unsigned char ch)
         {
             if (ch <= '9' && ch >= '0')
                 ch -= '0';
@@ -181,7 +155,7 @@ class ThreadWorker
                 ch -= 'a' - 10;
             else if (ch <= 'F' && ch >= 'A')
                 ch -= 'A' - 10;
-            else 
+            else
                 ch = 0;
 
             return ch;
@@ -230,7 +204,7 @@ class ThreadWorker
                 return "image/gif";
             else if (file_extension == ".swf")
                 return "application/x-shockwave-flash";
-            
+
             return "application/octet-stream";
         }
 
@@ -247,12 +221,12 @@ class ThreadWorker
     public:
         void run()
         {
-            std::string recv_buffer = "", send_buffer = "";
+            std::string recv_buffer = "";
+            char file_buffer[4096];
             recv_buffer.resize(4096);
 
             while (!TIME_TO_EXIT)
             {
-
                 int current_connection = 0, status = 0;
                 httprequest_t request;
 
@@ -275,81 +249,53 @@ class ThreadWorker
                 {
                     if (status == -1)
                     {
-                        // spdlog::debug("recv() returned -1. Error code: {0} ({1})", errno, strerror(errno));
+                        spdlog::debug("recv() returned -1. Error code: {0} ({1})", errno, strerror(errno));
                     }
 
-                    // spdlog::debug("Closing connection.");
+                    spdlog::debug("Closing connection.");
                     shutdown(current_connection, SHUT_RDWR);
                     close(current_connection);
                     continue;
                 }
 
-                // spdlog::debug("Bytes read: {0}.", status);
+                spdlog::debug("Bytes read: {0}.", status);
 
                 request = parse(recv_buffer);
 
                 if (!request.type.empty())
                 {
-                    send_buffer = form_response(request);
+                    httpresponse_t response = form_response(request);
+                    std::string response_as_string = response.to_str();
 
-                    std::string search_query = "Content-Length: BIG, ";
-                    size_t pos = send_buffer.find(search_query);
+                    // Мы отправляем заголовок файла без содержимого файла, это мы делаем ниже.
+                    send(current_connection, response_as_string.data(), response_as_string.length(), 0);
 
-                    if (pos != std::string::npos)
+                    if (request.type == "GET")
                     {
-                        std::string path = "";
-
-                        size_t end_line = send_buffer.find("\r\n", pos); // Не может провалиться, не нужна проверка.
-                        size_t start_position = pos + search_query.length();
-                        size_t path_length = end_line - start_position;
-
-                        path.insert(0, send_buffer, start_position, path_length);
-                        
-                        std::ifstream big_file(path);
-                        big_file.seekg(0, std::ios::end);
-
-                        size_t read_size = 4 * 1024 * 1024;
-                        size_t total_size = big_file.tellg();
-
-                        std::string buffer;
-                        buffer.resize(read_size);
-                        
-                        size_t last_read_index = 0;
-                        big_file.seekg(last_read_index);
-                        big_file.read(&buffer[0], read_size);
-
-                        last_read_index += read_size;
-
-                        send_buffer.replace(pos, std::string(search_query + path).length(), "Content-Length: " + std::to_string(total_size));
-                        send_buffer += buffer;
-
-                        send(current_connection, send_buffer.data(), send_buffer.length(), 0);
-
-                        while (last_read_index < total_size)
+                        std::ifstream file(response.path, std::ios::binary);
+                        if (file)
                         {
-                            big_file.seekg(last_read_index);
-                            big_file.read(&buffer[0], read_size);
-
-                            last_read_index += read_size;
-
-                            if (CLIENT_DISCONNECTED)
+                            while (file) // Пока мы не закончили читать файл, мы отправляем по частям файл размером 4КБ каждый, клиенту.
                             {
-                                CLIENT_DISCONNECTED = false;
-                                break;
+                                if (CLIENT_DISCONNECTED)
+                                {
+                                    CLIENT_DISCONNECTED = false;
+                                    break;
+                                }
+
+                                file.read(file_buffer, 4096);
+                                send(current_connection, file_buffer, file.gcount(), 0);
+
+                                if (file.peek() == EOF)
+                                    break;
                             }
-                            
-                            send(current_connection, buffer.data(), buffer.length(), 0);
                         }
+                        file.close();
                     }
-                    else
-                    {
-                        // spdlog::debug("Sending small file.");
-                        send(current_connection, send_buffer.data(), send_buffer.length(), 0);
-                    }
-                    // spdlog::debug("Sent response!");
+                    spdlog::debug("Sent response!");
                 }
 
-                // spdlog::debug("Closing connection.");
+                spdlog::debug("Closing connection.");
                 shutdown(current_connection, SHUT_RDWR);
                 close(current_connection);
             }
@@ -378,10 +324,10 @@ void start_server()
     while (!TIME_TO_EXIT)
     {
         int current_connection = accept(tcp_socket, (struct sockaddr*)NULL, NULL);
-        
+
         if (current_connection == -1)
         {
-            // spdlog::debug("accept() return {0}. Error code: \"{1}\"", current_connection, strerror(errno));
+            spdlog::debug("accept() return {0}. Error code: \"{1}\"", current_connection, strerror(errno));
             continue;
         }
 
@@ -399,13 +345,13 @@ bool read_config()
 
     if (!std::filesystem::exists(config_path))
     {
-        // spdlog::critical("\"{0}\" does not exist.", config_path.native());
+        spdlog::critical("\"{0}\" does not exist.", config_path.native());
         return false;
     }
 
     if (std::filesystem::is_directory(config_path))
     {
-        // spdlog::critical("\"{0}\" is a directory and not file.", config_path.native());
+        spdlog::critical("\"{0}\" is a directory and not file.", config_path.native());
         return false;
     }
 
@@ -413,7 +359,7 @@ bool read_config()
 
     if (!config_file.is_open())
     {
-        // spdlog::critical("Failed to open \"{0}\"", config_path.native());
+        spdlog::critical("Failed to open \"{0}\"", config_path.native());
         return false;
     }
 
@@ -422,19 +368,19 @@ bool read_config()
 
     std::string buffer;
     buffer.resize(size);
-    
+
     config_file.seekg(0);
     config_file.read(&buffer[0], size);
 
     if (!config_file)
     {
-        // spdlog::critical("Error reading \"{0}\"", config_path.native());
+        spdlog::critical("Error reading \"{0}\"", config_path.native());
         return false;
     }
 
     if (buffer.length() == 0)
     {
-        // spdlog::critical("\"{0}\" is empty.", config_path.native());
+        spdlog::critical("\"{0}\" is empty.", config_path.native());
         return false;
     }
 
@@ -459,19 +405,19 @@ bool read_config()
 
     if (MAX_THREADS <= 0)
     {
-        // spdlog::critical("thread_limit not found in \"{0}\"", config_path.native());
+        spdlog::critical("thread_limit not found in \"{0}\"", config_path.native());
         return false;
     }
-    
+
     if (SERVER_ROOT == "")
     {
-        // spdlog::critical("document_root not found in \"{0}\"", config_path.native());
+        spdlog::critical("document_root not found in \"{0}\"", config_path.native());
         return false;
     }
-    
+
     if (PORT <= 0)
     {
-        // spdlog::critical("port not found in \"{0}\"", config_path.native());
+        spdlog::critical("port not found in \"{0}\"", config_path.native());
         return false;
     }
 
@@ -480,7 +426,7 @@ bool read_config()
 
 void exit_handler(int code)
 {
-    // spdlog::critical("Received SIGINT or SIGTERM (code {0:d}). Exiting gracefully...", code);
+    spdlog::critical("Received SIGINT or SIGTERM (code {0:d}). Exiting gracefully...", code);
     TIME_TO_EXIT = true;
 }
 
@@ -491,19 +437,18 @@ void sigpipe_handler(int code)
 
 int main()
 {
-    // Пока что чтобы программа вышла после нажатия CTRL-C нужно отправить ещё одно соединение чтобы recv() разблокировал поток и потом проверил переменную TIME_TO_EXIT и уже тогда вышел.
-    // Также spdlog сильно замедляет работу программы даже при асинхронном логгировании в файл, поэтому для релиз версии все строки с логгированием комментируются.
+    // Пока что чтобы программа вышла после нажатия CTRL-C нужно отправить ещё одно соединение чтобы recv(), разблокировал поток и потом проверил переменную TIME_TO_EXIT и уже тогда вышел.
 
     signal(SIGTERM, exit_handler);
     signal(SIGINT, exit_handler);
     signal(SIGPIPE, sigpipe_handler);
 
-    // spdlog::set_level(// spdlog::level::debug);
-    // spdlog::set_pattern("[%H:%M:%S] [%l] [thread %t] %v");
+    spdlog::set_level(spdlog::level::critical); // Для release билда лучше оставить только critical, иначе снижение производительности.
+    spdlog::set_pattern("[%H:%M:%S] [%l] [thread %t] %v");
 
     if (!read_config())
     {
-        // spdlog::critical("Error reading config. Exiting.");
+        spdlog::critical("Error reading config. Exiting.");
         return -1;
     }
 
@@ -511,18 +456,18 @@ int main()
     for (int i = 0; i < MAX_THREADS; i++)
     {
         thread_workers.push_back(std::thread(thread_worker));
-        // spdlog::info("Created thread {0}", i);
+        spdlog::info("Created thread {0}", i);
     }
 
-    // spdlog::info("Starting server on port {0:d} and on {1:d} threads.\n", PORT, MAX_THREADS);
+    spdlog::info("Starting server on port {0:d} and on {1:d} threads.\n", PORT, MAX_THREADS);
     start_server();
 
     for (int i = 0; i < MAX_THREADS; i++)
     {
         thread_workers[i].join();
-        // spdlog::info("Joined thread {0}", i);
+        spdlog::info("Joined thread {0}", i);
     }
 
-    // spdlog::info("Exiting.");
+    spdlog::info("Exiting.");
     return 0;
 }

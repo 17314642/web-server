@@ -7,9 +7,9 @@ namespace str_helpers
     /*
         Заменяет все найденные строки match в строке data на строку replace.
 
-        data = строка в которой нужно искать
-        match = строка которую нужно заменить
-        replace = строка на которую нужно заменить
+        data - строка в которой нужно искать
+        match - строка которую нужно заменить
+        replace - строка на которую нужно заменить
     */
     std::string replace_all(std::string data, const std::string match, const std::string replace) 
     {
@@ -47,8 +47,8 @@ namespace str_helpers
 
     /*
         Делит строку на массив из строк на основе разделителя match
-        data = оригинальная строка
-        match = разделитель
+        data - оригинальная строка
+        match - разделитель
     */
     std::vector<std::string> split(std::string data, const std::string match)
     {
@@ -96,8 +96,8 @@ namespace str_helpers
 
     /*
         Проверяет что строка data начинается со строки match
-        data = оригинальная строка
-        match = строка с которой надо сравнить начало
+        data - оригинальная строка
+        match - строка с которой надо сравнить начало
     */
     bool starts_with(const std::string data, const std::string match)
     {
