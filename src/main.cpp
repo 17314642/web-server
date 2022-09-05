@@ -9,6 +9,7 @@
 #include <fstream>
 #include <filesystem>
 #include <iomanip>
+#include <algorithm>
 
 // C library
 #include <unistd.h>
@@ -443,7 +444,7 @@ int main()
     signal(SIGINT, exit_handler);
     signal(SIGPIPE, sigpipe_handler);
 
-    spdlog::set_level(spdlog::level::critical); // Для release билда лучше оставить только critical, иначе снижение производительности.
+    spdlog::set_level(spdlog::level::debug); // Для release билда лучше оставить только critical, иначе снижение производительности.
     spdlog::set_pattern("[%H:%M:%S] [%l] [thread %t] %v");
 
     if (!read_config())

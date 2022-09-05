@@ -1,6 +1,6 @@
 # Fangtooth
 
-Fangtooth это минимальный веб-сервер в котором каждую строчку кода страшно исполнять, а при каждом запуске надо надеяться на запуск без проблем.
+Fangtooth это минимальный веб-сервер с поддержкой GET, HEAD запросов.
 
 ## Тестовое окружение
 
@@ -8,183 +8,104 @@ Fangtooth это минимальный веб-сервер в котором к
 ```bash
 git clone https://github.com/17314642/web-server
 cd web-server
-docker build -t vvaria-httpd .
-docker run -d -p 80:80 vvaria-httpd
-./httptest.py
-docker container stop {CONTAINER_NAME}
+docker build -t httpd .
+docker run -d -p 80:80 httpd
 ```
 
-## Бенчмарк (i5-6400 3.3GHz)
-
-**nginx (5.289 сек.) (ab -n 100000 -c 8 "http://127.0.0.1:8081/httptest/wikipedia_russia.html")**
+**Остановка**
 ```bash
-This is ApacheBench, Version 2.3 <$Revision: 1843412 $>
+docker container stop httpd
+```
+
+## Бенчмарк между двумя ПК в 1 GBit LAN
+
+**nginx (768 workers, gzip on) (14.968 сек.) (ab -n 1000 -c 4 "http://192.168.50.2:80/wikipedia_russia.html")**
+```bash
+This is ApacheBench, Version 2.3 <$Revision: 1879490 $>
 Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
 Licensed to The Apache Software Foundation, http://www.apache.org/
 
-Benchmarking 127.0.0.1 (be patient)
-Completed 10000 requests
-Completed 20000 requests
-Completed 30000 requests
-Completed 40000 requests
-Completed 50000 requests
-Completed 60000 requests
-Completed 70000 requests
-Completed 80000 requests
-Completed 90000 requests
-Completed 100000 requests
-Finished 100000 requests
+Benchmarking 192.168.50.2 (be patient)
 
 
 Server Software:        nginx/1.18.0
-Server Hostname:        127.0.0.1
-Server Port:            8081
+Server Hostname:        192.168.50.2
+Server Port:            80
 
-Document Path:          /httptest/wikipedia_russia.html
-Document Length:        162 bytes
+Document Path:          /wikipedia_russia.html
+Document Length:        954824 bytes
 
-Concurrency Level:      8
-Time taken for tests:   5.289 seconds
-Complete requests:      100000
+Concurrency Level:      4
+Time taken for tests:   14.968 seconds
+Complete requests:      1000
 Failed requests:        0
-Non-2xx responses:      100000
-Total transferred:      32100000 bytes
-HTML transferred:       16200000 bytes
-Requests per second:    18908.73 [#/sec] (mean)
-Time per request:       0.423 [ms] (mean)
-Time per request:       0.053 [ms] (mean, across all concurrent requests)
-Transfer rate:          5927.44 [Kbytes/sec] received
+Total transferred:      955071000 bytes
+HTML transferred:       954824000 bytes
+Requests per second:    66.81 [#/sec] (mean)
+Time per request:       59.872 [ms] (mean)
+Time per request:       14.968 [ms] (mean, across all concurrent requests)
+Transfer rate:          62312.10 [Kbytes/sec] received
 
 Connection Times (ms)
               min  mean[+/-sd] median   max
-Connect:        0    0   0.0      0       1
-Processing:     0    0   0.1      0      16
-Waiting:        0    0   0.1      0      15
-Total:          0    0   0.1      0      16
+Connect:        1    5   2.1      4      15
+Processing:    31   55  16.6     51     142
+Waiting:        2    5   2.1      5      13
+Total:         33   60  17.1     56     149
 
 Percentage of the requests served within a certain time (ms)
-  50%      0
-  66%      0
-  75%      0
-  80%      0
-  90%      0
-  95%      0
-  98%      1
-  99%      1
- 100%     16 (longest request)
+  50%     56
+  66%     58
+  75%     60
+  80%     63
+  90%     81
+  95%     99
+  98%    119
+  99%    132
+ 100%    149 (longest request)
 ```
-**Fangtooth 2 потока (5.188 сек.) (ab -n 100000 -c 8 "http://127.0.0.1:8080/httptest/wikipedia_russia.html")**
+**Fangtooth 2 потока (15.043 сек.) (ab -n 1000 -c 4 "http://192.168.50.2:8080/wikipedia_russia.html")**
 ```bash
-This is ApacheBench, Version 2.3 <$Revision: 1843412 $>
+This is ApacheBench, Version 2.3 <$Revision: 1879490 $>
 Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
 Licensed to The Apache Software Foundation, http://www.apache.org/
 
-Benchmarking 127.0.0.1 (be patient)
-Completed 10000 requests
-Completed 20000 requests
-Completed 30000 requests
-Completed 40000 requests
-Completed 50000 requests
-Completed 60000 requests
-Completed 70000 requests
-Completed 80000 requests
-Completed 90000 requests
-Completed 100000 requests
-Finished 100000 requests
+Benchmarking 192.168.50.2 (be patient)
 
 
-Server Software:        Fangtooth/1.0.0
-Server Hostname:        127.0.0.1
+Server Software:        Fangtooth/2.0.0
+Server Hostname:        192.168.50.2
 Server Port:            8080
 
-Document Path:          /httptest/wikipedia_russia.html
-Document Length:        0 bytes
+Document Path:          /wikipedia_russia.html
+Document Length:        954824 bytes
 
-Concurrency Level:      8
-Time taken for tests:   5.188 seconds
-Complete requests:      100000
+Concurrency Level:      4
+Time taken for tests:   15.043 seconds
+Complete requests:      1000
 Failed requests:        0
-Non-2xx responses:      100000
-Total transferred:      10700000 bytes
-HTML transferred:       0 bytes
-Requests per second:    19276.82 [#/sec] (mean)
-Time per request:       0.415 [ms] (mean)
-Time per request:       0.052 [ms] (mean, across all concurrent requests)
-Transfer rate:          2014.28 [Kbytes/sec] received
+Total transferred:      954973000 bytes
+HTML transferred:       954824000 bytes
+Requests per second:    66.48 [#/sec] (mean)
+Time per request:       60.171 [ms] (mean)
+Time per request:       15.043 [ms] (mean, across all concurrent requests)
+Transfer rate:          61996.34 [Kbytes/sec] received
 
 Connection Times (ms)
               min  mean[+/-sd] median   max
-Connect:        0    0   0.0      0       4
-Processing:     0    0   0.2      0      11
-Waiting:        0    0   0.2      0      11
-Total:          0    0   0.2      0      11
+Connect:        2    5   1.7      4      24
+Processing:    34   55   9.4     54     103
+Waiting:        2   11   6.2      9      48
+Total:         38   60   9.3     58     108
 
 Percentage of the requests served within a certain time (ms)
-  50%      0
-  66%      0
-  75%      0
-  80%      0
-  90%      0
-  95%      0
-  98%      1
-  99%      1
- 100%     11 (longest request)
-```
-
-**Fangtooth 4 потока (5.403 сек.) (ab -n 100000 -c 8 "http://127.0.0.1:8080/httptest/wikipedia_russia.html")**
-```bash
-This is ApacheBench, Version 2.3 <$Revision: 1843412 $>
-Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
-Licensed to The Apache Software Foundation, http://www.apache.org/
-
-Benchmarking 127.0.0.1 (be patient)
-Completed 10000 requests
-Completed 20000 requests
-Completed 30000 requests
-Completed 40000 requests
-Completed 50000 requests
-Completed 60000 requests
-Completed 70000 requests
-Completed 80000 requests
-Completed 90000 requests
-Completed 100000 requests
-Finished 100000 requests
-
-
-Server Software:        Fangtooth/1.0.0
-Server Hostname:        127.0.0.1
-Server Port:            8080
-
-Document Path:          /httptest/wikipedia_russia.html
-Document Length:        0 bytes
-
-Concurrency Level:      8
-Time taken for tests:   5.403 seconds
-Complete requests:      100000
-Failed requests:        0
-Non-2xx responses:      100000
-Total transferred:      10700000 bytes
-HTML transferred:       0 bytes
-Requests per second:    18506.91 [#/sec] (mean)
-Time per request:       0.432 [ms] (mean)
-Time per request:       0.054 [ms] (mean, across all concurrent requests)
-Transfer rate:          1933.83 [Kbytes/sec] received
-
-Connection Times (ms)
-              min  mean[+/-sd] median   max
-Connect:        0    0   0.1      0       7
-Processing:     0    0   0.3      0      20
-Waiting:        0    0   0.3      0      20
-Total:          0    0   0.3      0      20
-
-Percentage of the requests served within a certain time (ms)
-  50%      0
-  66%      0
-  75%      0
-  80%      0
-  90%      0
-  95%      1
-  98%      1
-  99%      1
- 100%     20 (longest request)
+  50%     58
+  66%     60
+  75%     62
+  80%     64
+  90%     72
+  95%     79
+  98%     89
+  99%     96
+ 100%    108 (longest request)
 ```

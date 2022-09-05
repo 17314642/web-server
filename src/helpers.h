@@ -3,9 +3,6 @@
 #include <string>
 #include <sstream>
 
-// Logging library
-#include "spdlog/spdlog.h"
-
 struct connection_t
 {
     int connection_socket;
