@@ -9,7 +9,7 @@ Fangtooth это минимальный веб-сервер с поддержк�
 git clone https://github.com/17314642/web-server
 cd web-server
 docker build -t httpd .
-docker run -d -p 80:80 httpd
+docker run -it -p 80:80 httpd
 ```
 
 **Остановка**
